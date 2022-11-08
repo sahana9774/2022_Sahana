@@ -4,6 +4,32 @@ from skimage.transform import hough_line, hough_line_peaks
 from aicssegmentation.core.vessel import filament_3d_wrapper
 from aicssegmentation.core.pre_processing_utils import intensity_normalization, edge_preserving_smoothing_3d, image_smoothing_gaussian_3d
 from skimage.morphology import remove_small_objects  
+from skimage.draw import polygon
+
+# create a mask out of vertices
+def create_mask_from_shapes(vertices_polygons, im_shape):
+
+    '''
+    Input:
+    - vertices_polygons - list of polygons (coordinates of vertices)
+    - im_shape - ize of the image to create
+    Output:
+    - label image of polygons
+    '''
+
+    mask = np.zeros(im_shape).astype('uint8')
+
+    for i,poly in enumerate(vertices_polygons):
+
+        # if drawing was in 3D
+        if len(poly.shape) > 2:
+            mask_coord = polygon(vertices_polygons[i][:,1],vertices_polygons[i][:,2],shape=im_shape)
+        else:
+            mask_coord = polygon(vertices_polygons[i][:,0],vertices_polygons[i][:,1],shape=im_shape)
+
+        mask[mask_coord] = i+1
+
+    return mask
 
 
 def segment_actin_3D(image_actin):
