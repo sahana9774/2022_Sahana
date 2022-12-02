@@ -9,6 +9,9 @@ from skimage.transform import probabilistic_hough_line
 from skimage.morphology import skeletonize
 from skimage.measure import profile_line
 import math
+from skimage.morphology import erosion,disk
+from sklearn.cluster import KMeans
+from scipy.spatial import distance_matrix
 
 ################################################################################################################################
 # create a mask out of vertices
@@ -118,13 +121,7 @@ def find_fibers_orientation_v2(actin_im):
 
         rad_list.append(actin_rad)
 
-    # calculate mean orientation of the fibers
-    mean_orientation = np.mean(rad_list)
-
-    # calculate spread of orientations
-    std_orientation = np.std(rad_list)
-
-    return lines,mean_orientation,std_orientation
+    return lines,rad_list
 
 
 ################################################################################################################################
@@ -153,7 +150,7 @@ def orientations_from_vertices(vert):
 
     return my_rad_list
 
-    ################################################################################################################################
+################################################################################################################################
 
 def signal_from_vertices(vert,signal_im):
 
@@ -178,4 +175,44 @@ def signal_from_vertices(vert,signal_im):
 
     return signal_line
 
-        
+#################################################################################################################################
+
+def divide_cell_outside_ring(cell_image,ring_thickness,segment_number):
+
+    # generate single pixel line inside the desired ring
+    eroded_image_1 = erosion(cell_image,disk(int(ring_thickness)))
+    eroded_image_2 = erosion(eroded_image_1,disk(1))
+
+    seed_perim_image = eroded_image_1.astype(int) - eroded_image_2.astype(int)
+
+    # calculate seeds for clustering
+    t = np.nonzero(seed_perim_image)
+    points_array = np.array(t).T
+
+    clustering = KMeans(n_clusters=segment_number).fit(points_array)
+
+    center_point_list = []
+
+    for i in range(segment_number):
+
+        center_point = np.mean(points_array[clustering.labels_==i,:],axis=0)
+        center_point_list.append(center_point)
+
+    center_point_array = np.array(center_point_list)
+
+    # calculate where points from the ring belong
+    eroded_image = erosion(cell_image,disk(ring_thickness))
+    image_ring = cell_image - eroded_image.astype(int)
+    t = np.nonzero(image_ring)
+    points_array = np.array(t).T
+
+    dist_mat = distance_matrix(points_array,center_point_array)
+
+    cluster_identity = np.argmin(dist_mat,axis=1)
+    cluster_identity = np.expand_dims(cluster_identity,axis=1)
+
+    # concatenate points position with their cluster identity
+    points_array = np.concatenate((points_array,cluster_identity),axis=1)
+
+    return points_array
+     
