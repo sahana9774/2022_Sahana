@@ -1,4 +1,5 @@
 import numpy as np
+import math
 from skimage.transform import hough_line, hough_line_peaks
 
 from aicssegmentation.core.vessel import filament_3d_wrapper
@@ -6,10 +7,9 @@ from aicssegmentation.core.pre_processing_utils import intensity_normalization, 
 from skimage.morphology import remove_small_objects  
 from skimage.draw import polygon
 from skimage.transform import probabilistic_hough_line
-from skimage.morphology import skeletonize
 from skimage.measure import profile_line
-import math
-from skimage.morphology import erosion,disk
+from skimage.morphology import erosion, binary_erosion, binary_dilation, opening, closing, disk, skeletonize
+from skimage.segmentation import expand_labels
 from sklearn.cluster import KMeans
 from scipy.spatial import distance_matrix
 
@@ -216,3 +216,46 @@ def divide_cell_outside_ring(cell_image,ring_thickness,segment_number):
 
     return points_array
      
+#################################################################################################################################
+
+def fill_gaps_between_cells(mask_shapes_overlap):
+
+    # find narrow passages between the cells
+    # it's defined as points that are within 8 px from a cell if they are simultaneously within 10px from another cell + morphological rearrangements to make it smoother
+
+    mask_shapes = mask_shapes_overlap.copy()
+    mask_shapes[mask_shapes == 255] = 0
+
+    mask_list_small = []
+    mask_list_big = []
+
+    for i in range(np.max(mask_shapes)):
+
+        mask = (mask_shapes == i+1)
+
+        mask_dilated_small = binary_dilation(mask,disk(8))
+        mask_dilated_big = binary_dilation(mask,disk(10))
+
+        mask_list_small.append(mask_dilated_small.astype(int) - mask)
+        mask_list_big.append(mask_dilated_big.astype(int) - mask)
+
+
+    # combine the masks
+    possible = np.sum(np.array(mask_list_big),axis=0)>1
+
+    t = np.logical_and(np.array(mask_list_small),possible)
+    passages = np.sum(np.array(t),axis=0)
+
+    # trim the passages
+    mask_to_trim = ((mask_shapes_overlap > 0) | (passages > 1))
+    mask_trimmed = ((opening(mask_to_trim,disk(10))) | (mask_shapes_overlap)>0)
+    mask_trimmed = ((binary_erosion(mask_trimmed,disk(5))) | (mask_shapes_overlap)>0)
+    mask_trimmed = ((closing(mask_trimmed,disk(2))) | (mask_shapes_overlap)>0)
+
+    # combine the pixels that need to be re-assigned
+    to_divide = mask_trimmed.astype(int) - (mask_shapes_overlap > 0).astype(int) + (mask_shapes_overlap==255).astype(int)
+
+    # re-assign pixels
+    im_divided = expand_labels(mask_shapes,250)*(to_divide).astype(int)
+
+    return im_divided
