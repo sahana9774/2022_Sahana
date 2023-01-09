@@ -14,6 +14,7 @@ from sklearn.cluster import KMeans
 from scipy.spatial import distance_matrix
 
 ################################################################################################################################
+
 # create a mask out of vertices
 def create_mask_from_shapes(vertices_polygons, im_shape):
 
@@ -40,6 +41,7 @@ def create_mask_from_shapes(vertices_polygons, im_shape):
     return mask
 
 ################################################################################################################################
+
 # segmentation of actin in 3D volumes
 def segment_actin_3D(image_actin):
 
@@ -72,8 +74,8 @@ def segment_actin_3D(image_actin):
 
     return image_actin_mask
 
-
 ################################################################################################################################
+
 def find_fibers_orientation(image_actin_mask_2D):
 
     '''
@@ -96,6 +98,7 @@ def find_fibers_orientation(image_actin_mask_2D):
     return dominant_flow
 
 ################################################################################################################################
+
 def calculate_orientation(p0,p1):
     
     myrad = -(math.atan2(p1[1]-p0[1], p1[0]-p0[0]) + np.pi/2)
@@ -103,6 +106,7 @@ def calculate_orientation(p0,p1):
     return myrad
 
 ################################################################################################################################
+
 def find_fibers_orientation_v2(actin_im):
 
     # skeletonize the image
@@ -122,7 +126,6 @@ def find_fibers_orientation_v2(actin_im):
         rad_list.append(actin_rad)
 
     return lines,rad_list
-
 
 ################################################################################################################################
 
