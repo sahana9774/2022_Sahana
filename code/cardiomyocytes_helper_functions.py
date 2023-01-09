@@ -19,13 +19,16 @@ from scipy.spatial import distance_matrix
 def create_mask_from_shapes(vertices_polygons, im_shape):
 
     '''
+    Function to create mask from vertices of the polygons. It removes regions of overlap.
+
     Input:
     - vertices_polygons - list of polygons (coordinates of vertices)
-    - im_shape - ize of the image to create
+    - im_shape - size of the image to create
     Output:
     - label image of polygons
     '''
 
+    # create a mask out of vertices
     mask = np.zeros(im_shape).astype('uint8')
 
     for i,poly in enumerate(vertices_polygons):
@@ -36,9 +39,18 @@ def create_mask_from_shapes(vertices_polygons, im_shape):
         else:
             mask_coord = polygon(vertices_polygons[i][:,0],vertices_polygons[i][:,1],shape=im_shape)
 
-        mask[mask_coord] = i+1
+        mask[mask_coord] = mask[mask_coord] + (i+1)
 
-    return mask
+        # mark areas of the overlap
+        mask[mask > (i+1)] = 255
+
+    mask_shapes_overlap = mask
+
+    # shapes without overlapping regions
+    mask_shapes = mask_shapes_overlap.copy()
+    mask_shapes[mask_shapes == 255] = 0
+
+    return mask_shapes_overlap,mask_shapes
 
 ################################################################################################################################
 
