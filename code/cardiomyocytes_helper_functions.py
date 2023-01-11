@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import math
 from skimage.transform import hough_line, hough_line_peaks
 
@@ -10,6 +11,7 @@ from skimage.transform import probabilistic_hough_line
 from skimage.measure import profile_line
 from skimage.morphology import erosion, binary_erosion, binary_dilation, opening, closing, disk, skeletonize
 from skimage.segmentation import expand_labels
+from skimage.filters import meijering
 from sklearn.cluster import KMeans
 from scipy.spatial import distance_matrix
 
@@ -121,12 +123,15 @@ def calculate_orientation(p0,p1):
 
 def find_fibers_orientation_v2(actin_im):
 
+    skeleton_im = meijering(actin_im,sigmas=range(1, 3),black_ridges=False)
+    skeleton_im[skeleton_im < 0.5] = 0
+
     # skeletonize the image
-    skeleton_im = skeletonize(actin_im)
+    #skeleton_im = skeletonize(actin_im)
 
     # find straight lines in the image
-    lines = probabilistic_hough_line(skeleton_im, threshold=4, line_length=15,
-                                    line_gap=2)
+    lines = probabilistic_hough_line(skeleton_im, threshold=1, line_length=15,
+                                    line_gap=0)
 
     # calculate orientation of the lines
     rad_list = []
@@ -192,7 +197,7 @@ def signal_from_vertices(vert,signal_im):
 
 #################################################################################################################################
 
-def divide_cell_outside_ring(cell_image,ring_thickness,segment_number):
+def divide_cell_outside_ring(cell_image,cell_center,ring_thickness,segment_number):
 
     # generate single pixel line inside the desired ring
     eroded_image_1 = erosion(cell_image,disk(int(ring_thickness)))
@@ -228,6 +233,22 @@ def divide_cell_outside_ring(cell_image,ring_thickness,segment_number):
 
     # concatenate points position with their cluster identity
     points_array = np.concatenate((points_array,cluster_identity),axis=1)
+
+    ##########################################################################
+    # arrange clockwise from most right
+
+    # define centroid array
+    centroid_array = pd.DataFrame([np.mean(points_array[points_array[:,2]==x,:],axis=0) for x in range(segment_number)],columns=['x','y','set'])
+    centroid_array['centroid_angle'] = [np.arctan2(x-cell_center[1],y-cell_center[0]) for x,y in zip(centroid_array.loc[:,'x'],centroid_array.loc[:,'y'])]
+
+    # shift to start from the most left region
+    centroid_array.loc[centroid_array.centroid_angle<0,'centroid_angle'] = centroid_array.loc[centroid_array.centroid_angle<0,'centroid_angle'] + 2*np.pi
+
+    # sort
+    centroid_array = centroid_array.sort_values('centroid_angle',ignore_index=True)
+
+    # change identity based on the new order
+    points_array[:,2] = [centroid_array.loc[centroid_array.set == x,:].index[0] for x in points_array[:,2]]
 
     return points_array
      
