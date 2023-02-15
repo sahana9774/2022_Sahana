@@ -6,7 +6,7 @@ from skimage.transform import hough_line, hough_line_peaks
 from aicssegmentation.core.vessel import filament_3d_wrapper
 from aicssegmentation.core.pre_processing_utils import intensity_normalization, edge_preserving_smoothing_3d, image_smoothing_gaussian_3d
 from skimage.morphology import remove_small_objects  
-from skimage.draw import polygon
+from skimage.draw import polygon, polygon2mask
 from skimage.transform import probabilistic_hough_line
 from skimage.measure import profile_line
 from skimage.morphology import erosion, binary_erosion, binary_dilation, opening, closing, disk, skeletonize
@@ -39,9 +39,11 @@ def create_mask_from_shapes(vertices_polygons, im_shape):
         if len(poly.shape) > 2:
             mask_coord = polygon(vertices_polygons[i][:,1],vertices_polygons[i][:,2],shape=im_shape)
         else:
-            mask_coord = polygon(vertices_polygons[i][:,0],vertices_polygons[i][:,1],shape=im_shape)
+            #mask_coord = polygon(vertices_polygons[i][:,0],vertices_polygons[i][:,1],shape=im_shape)
+            mask_single = polygon2mask(im_shape,vertices_polygons[i])
 
-        mask[mask_coord] = mask[mask_coord] + (i+1)
+        # it's iteratively adding, so regions with anly overlap will be higher than i+1
+        mask[mask_single] = mask[mask_single] + (i+1)
 
         # mark areas of the overlap
         mask[mask > (i+1)] = 255
@@ -256,6 +258,13 @@ def divide_cell_outside_ring(cell_image,cell_center,ring_thickness,segment_numbe
 
 def fill_gaps_between_cells(mask_shapes_overlap):
 
+    '''
+    input:
+        - label image of polygons without overlapping regions
+    output:
+        - contested regions divided between the cells  
+    '''
+
     # find narrow passages between the cells
     # it's defined as points that are within 8 px from a cell if they are simultaneously within 10px from another cell + morphological rearrangements to make it smoother
 
@@ -265,6 +274,7 @@ def fill_gaps_between_cells(mask_shapes_overlap):
     mask_list_small = []
     mask_list_big = []
 
+    # loop through the objects 
     for i in range(np.max(mask_shapes)):
 
         mask = (mask_shapes == i+1)
@@ -276,9 +286,11 @@ def fill_gaps_between_cells(mask_shapes_overlap):
         mask_list_big.append(mask_dilated_big.astype(int) - mask)
 
 
-    # combine the masks
+    # combine the masks (choose regions that may contain corrections)
     possible = np.sum(np.array(mask_list_big),axis=0)>1
 
+    # select which regions from the small rings are in the possible territory
+    # keeps regions in small distance to a cell not further than the bigger distance from another cell
     t = np.logical_and(np.array(mask_list_small),possible)
     passages = np.sum(np.array(t),axis=0)
 
